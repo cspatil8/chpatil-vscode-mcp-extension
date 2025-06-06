@@ -1,5 +1,0 @@
-ignoredBuiltDependencies:
-  - '@vscode/vsce-sign'
-  - keytar
-onlyBuiltDependencies:
-  - node-pty
