@@ -6,7 +6,13 @@ import * as http from 'http';
 import * as vscode from 'vscode';
 import { z } from 'zod'; // Added import
 import packageJson from '../package.json';
-import { setBreakpoint, unsetBreakpoint } from './tools/breakpoint_utility'; // Added import
+import {
+    debugContinue,
+    debugStepInto,
+    debugStepOver,
+    setBreakpoint,
+    unsetBreakpoint,
+} from './tools/breakpoint_utility'; // Updated import
 import { debugJestTest } from './tools/debug_jest_test';
 import { executeCommandInTerminal } from './tools/run_npm_script';
 import { resolvePort } from './utils/port';
@@ -174,6 +180,104 @@ export const activate = async (context: vscode.ExtensionContext) => {
                         {
                             type: 'text',
                             text: `Error debugging Jest test: ${error.message}`,
+                        },
+                    ],
+                };
+            }
+        },
+    );
+
+    // Register 'debug_step_into' tool
+    mcpServer.tool(
+        'debug_step_into',
+        dedent`
+            Steps into the current line of code during debugging.
+            This will enter into function calls, allowing you to debug the internal implementation.
+            The debugger must be active and paused for this command to work.
+        `.trim(),
+        {}, // No parameters needed
+        async () => {
+            try {
+                await debugStepInto();
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: 'Debug step into executed successfully.',
+                        },
+                    ],
+                };
+            } catch (error: any) {
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Error executing debug step into: ${error.message}`,
+                        },
+                    ],
+                };
+            }
+        },
+    );
+
+    // Register 'debug_step_over' tool
+    mcpServer.tool(
+        'debug_step_over',
+        dedent`
+            Steps over the current line of code during debugging.
+            This will execute the current line without entering into function calls.
+            The debugger must be active and paused for this command to work.
+        `.trim(),
+        {}, // No parameters needed
+        async () => {
+            try {
+                await debugStepOver();
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: 'Debug step over executed successfully.',
+                        },
+                    ],
+                };
+            } catch (error: any) {
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Error executing debug step over: ${error.message}`,
+                        },
+                    ],
+                };
+            }
+        },
+    );
+
+    // Register 'debug_continue' tool
+    mcpServer.tool(
+        'debug_continue',
+        dedent`
+            Continues execution during debugging until the next breakpoint is hit or the program completes.
+            The debugger must be active and paused for this command to work.
+        `.trim(),
+        {}, // No parameters needed
+        async () => {
+            try {
+                await debugContinue();
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: 'Debug continue executed successfully.',
+                        },
+                    ],
+                };
+            } catch (error: any) {
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Error executing debug continue: ${error.message}`,
                         },
                     ],
                 };
