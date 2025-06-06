@@ -45,7 +45,7 @@ export const activate = async (context: vscode.ExtensionContext) => {
         {}, // No parameters needed for this specific command tool
         async () => {
             // Removed params
-            const commandToRun = 'git status'; // Hardcoded command // TODO: change to 'npm run build'
+            const commandToRun = 'npm run build'; // Hardcoded command
             const result = await executeCommandInTerminal(commandToRun, 'Build Process'); // Call the new function with the command and a terminal name
             return {
                 ...result,

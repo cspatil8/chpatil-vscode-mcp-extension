@@ -1,20 +1,17 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { runCmdInTerminal, WaitOptions } from '../utils/ptyHelper';
 
 /**
- * Runs a specific Jest test and captures the output, or debugs it using VS Code's built-in debugger.
+ * Debugs a specific Jest test using VS Code's built-in debugger.
  *
  * @param testFilePath The absolute path to the test file
  * @param testNamePattern Optional pattern to match specific test names. If not provided, runs all tests in the file.
- * @param useDebugger Optional flag to use VS Code debugger instead of capturing output (defaults to false)
- * @returns A promise that resolves with the Jest test output or debug session result
+ * @returns A promise that resolves with the result of the debug session start
  */
 export const debugJestTest = async (
     testFilePath: string,
     testNamePattern?: string,
-    useDebugger: boolean = false,
 ): Promise<{ content: { type: 'text'; text: string }[]; isError: boolean }> => {
     try {
         // Validate the test file path
@@ -56,93 +53,53 @@ export const debugJestTest = async (
         // Convert test file path to relative POSIX format for Jest
         const relTestPath = toPosix(path.relative(projectRoot, testFilePath));
 
-        // Build CLI args
+        // Build CLI args exactly like the original extension
         const args = [
             '--runTestsByPath', // tell Jest: "this is a path, not a pattern"
             relTestPath,
             '--runInBand', // single process for easy debugging
             '--no-coverage', // faster
-            '--verbose', // More detailed output for better parsing
         ];
 
         if (testNamePattern) {
             args.push('--testNamePattern', testNamePattern);
         }
 
-        // If debugger mode is requested, use the original debug approach
-        if (useDebugger) {
-            // Create the debug configuration
-            const debugConfig: vscode.DebugConfiguration = {
-                type: 'node', // VS Code will insert --inspect etc. for us
-                request: 'launch',
-                name: `Debug Jest Test${testNamePattern ? ` (${testNamePattern})` : ''}`,
-                program: jestJs, // **MUST be a JS file, not cmd.exe**
-                args,
-                cwd: projectRoot, // Use the project root (directory containing node_modules), NOT bin folder
-                console: 'integratedTerminal',
-                internalConsoleOptions: 'neverOpen',
-                skipFiles: ['<node_internals>/**', '**/node_modules/**'],
+        // Create the debug configuration
+        const debugConfig: vscode.DebugConfiguration = {
+            type: 'node', // VS Code will insert --inspect etc. for us
+            request: 'launch',
+            name: `Debug Jest Test${testNamePattern ? ` (${testNamePattern})` : ''}`,
+            program: jestJs, // **MUST be a JS file, not cmd.exe**
+            args,
+            cwd: projectRoot, // Use the project root (directory containing node_modules), NOT bin folder
+            console: 'integratedTerminal',
+            internalConsoleOptions: 'neverOpen',
+            skipFiles: ['<node_internals>/**', '**/node_modules/**'],
+        };
+
+        // Start the debug session
+        const debugStarted = await vscode.debug.startDebugging(workspaceFolder, debugConfig);
+
+        if (debugStarted) {
+            const message = `Started debugging Jest test${
+                testNamePattern ? ` with pattern "${testNamePattern}"` : ''
+            } in file: ${path.basename(testFilePath)}`;
+            return {
+                content: [{ type: 'text', text: message }],
+                isError: false,
             };
-
-            // Start the debug session
-            const debugStarted = await vscode.debug.startDebugging(workspaceFolder, debugConfig);
-
-            if (debugStarted) {
-                const message = `Started debugging Jest test${
-                    testNamePattern ? ` with pattern "${testNamePattern}"` : ''
-                } in file: ${path.basename(testFilePath)}`;
-                return {
-                    content: [{ type: 'text', text: message }],
-                    isError: false,
-                };
-            } else {
-                return {
-                    content: [{ type: 'text', text: 'Could not start Jest debug session.' }],
-                    isError: true,
-                };
-            }
+        } else {
+            return {
+                content: [{ type: 'text', text: 'Could not start Jest debug session.' }],
+                isError: true,
+            };
         }
-
-        // Use runCmdInTerminal to capture Jest output
-        const terminalName = `Jest Test: ${path.basename(testFilePath)}`;
-
-        // Set up wait options to detect Jest completion
-        const waitOptions: WaitOptions = {
-            // Jest typically ends with summary lines like "Tests: 1 passed" or "FAIL"
-            until: /(?:Tests:\s+\d+.*?(?:passed|failed)|Test Suites:\s+\d+.*?(?:passed|failed)|FAIL|PASS.*?(?:\d+\.\d+s|\d+ms))/,
-            timeoutMs: 3000000, // 30 second timeout
-        };
-
-        // Use Node.js to run Jest (since jestJs is a .js file)
-        const result = await runCmdInTerminal('node', [jestJs, ...args], projectRoot, waitOptions, terminalName);
-
-        // Determine if there were test failures
-        const hasFailures =
-            result.output.includes('FAIL') ||
-            result.output.includes('failed') ||
-            (result.exit !== null && result.exit !== 0);
-
-        return {
-            content: [
-                {
-                    type: 'text',
-                    text: result.output || `Jest test completed for ${path.basename(testFilePath)}`,
-                },
-            ],
-            isError: hasFailures,
-        };
     } catch (error: any) {
-        console.error('Error running Jest test:', error);
+        console.error('Error debugging Jest test:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);
-
-        // Handle timeout specifically
-        const isTimeout = errorMessage.includes('timeout');
-        const message = isTimeout
-            ? `Jest test timed out for file: ${path.basename(testFilePath)}`
-            : `Failed to run Jest test: ${errorMessage}`;
-
         return {
-            content: [{ type: 'text', text: message }],
+            content: [{ type: 'text', text: `Failed to debug Jest test: ${errorMessage}` }],
             isError: true,
         };
     }

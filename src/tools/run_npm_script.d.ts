@@ -1,5 +1,4 @@
-import { WaitOptions } from '../utils/ptyHelper';
-export declare const executeCommandInTerminal: (command: string, terminalName?: string, waitOptions?: WaitOptions) => Promise<{
+export declare const executeCommandInTerminal: (command: string, terminalName?: string) => Promise<{
     content: {
         type: "text";
         text: string;
