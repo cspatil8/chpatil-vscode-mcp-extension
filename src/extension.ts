@@ -4,7 +4,10 @@ import dedent from 'dedent';
 import express, { Request, Response } from 'express';
 import * as http from 'http';
 import * as vscode from 'vscode';
+import { z } from 'zod'; // Added import
 import packageJson from '../package.json';
+import { setBreakpoint, unsetBreakpoint } from './tools/breakpoint_utility'; // Added import
+import { debugJestTest } from './tools/debug_jest_test';
 import { executeCommandInTerminal } from './tools/run_npm_script';
 import { resolvePort } from './utils/port';
 
@@ -46,6 +49,135 @@ export const activate = async (context: vscode.ExtensionContext) => {
                     type: 'text',
                 })),
             };
+        },
+    );
+
+    // Register 'set_breakpoint' tool
+    mcpServer.tool(
+        'set_breakpoint',
+        dedent`
+            Sets a breakpoint in a specified file at a given line and column number.
+            The line and column numbers are 0-based.
+            If the column number is not provided, it defaults to 0.
+        `.trim(),
+        {
+            fileName: z.string().describe('The absolute path to the file where the breakpoint should be set.'),
+            lineNumber: z.number().int().min(0).describe('The 0-based line number for the breakpoint.'),
+            columnNumber: z
+                .number()
+                .int()
+                .min(0)
+                .default(0)
+                .describe('The 0-based column number for the breakpoint. Defaults to 0 if not provided.'),
+        },
+        async (params: { fileName: string; lineNumber: number; columnNumber?: number }) => {
+            try {
+                setBreakpoint(params.fileName, params.lineNumber, params.columnNumber);
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Breakpoint set at ${params.fileName}:${params.lineNumber}${
+                                params.columnNumber !== undefined ? ':' + params.columnNumber : ''
+                            }`,
+                        },
+                    ],
+                };
+            } catch (error: any) {
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Error setting breakpoint: ${error.message}`,
+                        },
+                    ],
+                };
+            }
+        },
+    );
+
+    // Register 'unset_breakpoint' tool
+    mcpServer.tool(
+        'unset_breakpoint',
+        dedent`
+            Removes a breakpoint from a specified file at a given line and column number.
+            The line and column numbers are 0-based.
+            If the column number is not provided, it defaults to 0.
+        `.trim(),
+        {
+            fileName: z.string().describe('The absolute path to the file where the breakpoint should be removed.'),
+            lineNumber: z.number().int().min(0).describe('The 0-based line number for the breakpoint to remove.'),
+            columnNumber: z
+                .number()
+                .int()
+                .min(0)
+                .default(0)
+                .describe('The 0-based column number for the breakpoint to remove. Defaults to 0 if not provided.'),
+        },
+        async (params: { fileName: string; lineNumber: number; columnNumber?: number }) => {
+            try {
+                unsetBreakpoint(params.fileName, params.lineNumber, params.columnNumber);
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Breakpoint removed from ${params.fileName}:${params.lineNumber}${
+                                params.columnNumber !== undefined ? ':' + params.columnNumber : ''
+                            }`,
+                        },
+                    ],
+                };
+            } catch (error: any) {
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Error removing breakpoint: ${error.message}`,
+                        },
+                    ],
+                };
+            }
+        },
+    );
+
+    // Register 'debug_jest_test' tool
+    mcpServer.tool(
+        'debug_jest_test',
+        dedent`
+            Starts a Jest test in debug mode using VS Code's built-in debugger.
+            This allows debugging specific test files and optionally specific test cases within those files.
+            The debugger will attach and allow stepping through test code and breakpoints.
+        `.trim(),
+        {
+            testFilePath: z.string().describe('The absolute path to the Jest test file to debug.'),
+            testNamePattern: z
+                .string()
+                .optional()
+                .describe(
+                    'Optional pattern to match specific test names. If not provided, runs all tests in the file.',
+                ),
+        },
+        async (params: { testFilePath: string; testNamePattern?: string }) => {
+            try {
+                const result = await debugJestTest(params.testFilePath, params.testNamePattern);
+                return {
+                    ...result,
+                    content: result.content.map((c) => ({
+                        ...c,
+                        text: typeof c.text === 'string' ? c.text : String(c.text),
+                        type: 'text',
+                    })),
+                };
+            } catch (error: any) {
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Error debugging Jest test: ${error.message}`,
+                        },
+                    ],
+                };
+            }
         },
     );
 
