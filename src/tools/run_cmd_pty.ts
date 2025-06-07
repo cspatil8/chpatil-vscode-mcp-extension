@@ -54,7 +54,7 @@ export const executeCommandInPty = async (
         }) as ChildProcessWithoutNullStreams;
 
         child.stdout.on('data', (d) => {
-          const text = d.toString();
+          const text = formatTerminalChunk(d.toString());
           output += text;
           writeEmitter.fire(text);
           if (interceptPattern?.test(text)) {
@@ -115,3 +115,24 @@ function killProcessTree(child: ChildProcessWithoutNullStreams) {
     } catch { /* ignore */ }
   }
 }
+
+/**
+ * Tidies a raw stdout/stderr chunk so it looks good in VS Code’s
+ * integrated terminal.
+ *
+ * • Turns any solitary "\r" (carriage return not already followed by \n)
+ *   into "\r\n" so each update lands on a new line instead of overprinting.
+ * • Normalises mixed line endings.
+ * • Optionally you could strip ANSI colour codes here, but you asked
+ *   for “no colour”, so we leave them intact (they will render fine).
+ */
+export function formatTerminalChunk(chunk: string): string {
+    return chunk
+      // 1. ensure every bare CR becomes a LF
+      .replace(/\r(?!\n)/g, '\n')
+      // 2 + 3. split, trim end, filter blanks, re‑join
+      .split('\n')
+      .map(line => line.replace(/\s+$/, ''))      // right‑trim
+      .filter(line => line.length)                // drop empties
+      .join('\r\n');                              // VS Code happy with CRLF
+  }

@@ -5,3 +5,4 @@ export declare const executeCommandInPty: (command: string, interceptPattern?: R
     }[];
     isError: boolean;
 }>;
+export declare function formatTerminalChunk(chunk: string): string;
