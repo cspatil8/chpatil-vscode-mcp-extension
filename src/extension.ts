@@ -14,7 +14,7 @@ import {
     unsetBreakpoint,
 } from './tools/breakpoint_utility'; // Updated import
 import { debugJestTest } from './tools/debug_jest_test';
-import { executeCommandInTerminal } from './tools/run_npm_script';
+import { executeCommandInPty } from './tools/run_cmd_pty';
 import { resolvePort } from './utils/port';
 
 const extensionName = 'chpatil-mcp-server';
@@ -46,7 +46,7 @@ export const activate = async (context: vscode.ExtensionContext) => {
         async () => {
             // Removed params
             const commandToRun = 'npm run build'; // Hardcoded command
-            const result = await executeCommandInTerminal(commandToRun, 'Build Process'); // Call the new function with the command and a terminal name
+            const result = await executeCommandInPty(commandToRun); // Call the new function with the command and a terminal name
             return {
                 ...result,
                 content: result.content.map((c) => ({
