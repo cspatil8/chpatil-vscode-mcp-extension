@@ -14,6 +14,7 @@ import {
     unsetBreakpoint,
 } from './tools/breakpoint_utility'; // Updated import
 import { debugJestTest } from './tools/debug_jest_test';
+import { tellMeAJoke } from './tools/llm';
 import { executeCommandInPty } from './tools/run_cmd_pty';
 import { resolvePort } from './utils/port';
 
@@ -278,6 +279,37 @@ export const activate = async (context: vscode.ExtensionContext) => {
                         {
                             type: 'text',
                             text: `Error executing debug continue: ${error.message}`,
+                        },
+                    ],
+                };
+            }
+        },
+    );
+
+    // Register 'tell_me_a_joke' tool
+    mcpServer.tool(
+        'tell_me_a_joke',
+        dedent`
+            Tells a joke using the VS Code Language Model API.
+        `.trim(),
+        {}, // No parameters needed
+        async () => {
+            try {
+                const joke = await tellMeAJoke();
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: joke,
+                        },
+                    ],
+                };
+            } catch (error: any) {
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Error telling a joke: ${error.message}`,
                         },
                     ],
                 };
