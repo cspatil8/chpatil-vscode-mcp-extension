@@ -127,12 +127,17 @@ function killProcessTree(child: ChildProcessWithoutNullStreams) {
  *   for “no colour”, so we leave them intact (they will render fine).
  */
 export function formatTerminalChunk(chunk: string): string {
-    return chunk
-      // 1. ensure every bare CR becomes a LF
-      .replace(/\r(?!\n)/g, '\n')
-      // 2 + 3. split, trim end, filter blanks, re‑join
+    // Step 1 – ensure every CR ends with a LF
+    const normalised = chunk.replace(/\r(?!\n)/g, '\n');
+
+    // Step 2/3 – split, trim, filter, then re‑join
+    return normalised
       .split('\n')
-      .map(line => line.replace(/\s+$/, ''))      // right‑trim
-      .filter(line => line.length)                // drop empties
-      .join('\r\n');                              // VS Code happy with CRLF
+      .map(line => {
+        // remove spaces/tabs AFTER the last visible char, but *before*
+        // any trailing ANSI reset codes (e.g. “…foo   \x1B[0m”)
+        return line.replace(/[\t ]+(?=(?:\x1B\[[0-9;]*m)*$)/, '');
+      })
+      .filter(line => line.length)   // discard blank lines
+      .join('\r\n');                 // CRLF = safe on all OSs in VS Code
   }
