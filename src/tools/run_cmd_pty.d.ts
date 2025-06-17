@@ -1,4 +1,20 @@
-export declare const executeCommandInPty: (command: string, interceptPattern?: RegExp) => Promise<{
+type PtyOptions = {
+    terminalName: string;
+    cwd: string;
+    interceptPattern?: RegExp;
+    onIntercept?: () => void;
+} & ({
+    command: string;
+    program?: never;
+    args?: never;
+    useShell: true;
+} | {
+    command?: never;
+    program: string;
+    args: string[];
+    useShell?: false;
+});
+export declare const executeCommandInPty: (options: PtyOptions) => Promise<{
     content: {
         type: "text";
         text: string;
@@ -6,3 +22,4 @@ export declare const executeCommandInPty: (command: string, interceptPattern?: R
     isError: boolean;
 }>;
 export declare function formatTerminalChunk(chunk: string): string;
+export {};

@@ -3,6 +3,7 @@ import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import dedent from 'dedent';
 import express, { Request, Response } from 'express';
 import * as http from 'http';
+import { resolve } from 'path/win32';
 import * as vscode from 'vscode';
 import { z } from 'zod'; // Added import
 import packageJson from '../package.json';
@@ -47,7 +48,17 @@ export const activate = async (context: vscode.ExtensionContext) => {
         async () => {
             // Removed params
             const commandToRun = 'npm run build'; // Hardcoded command
-            const result = await executeCommandInPty(commandToRun); // Call the new function with the command and a terminal name
+            const result = await executeCommandInPty({
+                command: commandToRun,
+                terminalName: 'Build Process',
+                cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || process.cwd(),
+                useShell: true,
+                interceptPattern: /npm run build:component\.library/,
+                onIntercept: () => {
+                    console.log("intercepted npm run build:component.library. Exiting because this is just a test");
+                    resolve();
+                }
+            }); // Call the new function with the command and a terminal name
             return {
                 ...result,
                 content: result.content.map((c) => ({

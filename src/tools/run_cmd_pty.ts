@@ -1,6 +1,24 @@
 import { ChildProcessWithoutNullStreams, execFileSync, spawn } from 'child_process';
 import * as vscode from 'vscode';
 
+// Define a type for the options to make it clear and type-safe
+type PtyOptions = {
+  terminalName: string;
+  cwd: string;
+  interceptPattern?: RegExp;
+  onIntercept?: () => void; // Callback to signal when a pattern is matched
+} & ({
+  command: string; // For shell-based execution
+  program?: never;
+  args?: never;
+  useShell: true;
+} | {
+  command?: never; // For direct program execution
+  program: string;
+  args: string[];
+  useShell?: false;
+  });
+
 /**
  * Executes a shell command inside a VS Code integrated terminal, echoes
  * all I/O, and resolves when the process exits.
@@ -10,12 +28,11 @@ import * as vscode from 'vscode';
  * @returns                Promise with collected text + success flag
  */
 export const executeCommandInPty = async (
-  command: string,
-  interceptPattern?: RegExp,
+  options: PtyOptions
 ): Promise<{ content: { type: 'text'; text: string }[]; isError: boolean }> => {
-  if (!command.trim()) {
+  if (!options.command && !options.program) {
     return {
-      content: [{ type: 'text', text: 'Error: No command provided.' }],
+      content: [{ type: 'text', text: 'Error: No command or program provided.' }],
       isError: true
     };
   }
@@ -42,32 +59,42 @@ export const executeCommandInPty = async (
 
       /** Spawn the command in a shell. */
       open(): void {
-        const cwd =
-          vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || process.cwd();
+        if (options.useShell === true) { // Explicitly check for true
+          if (!options.command) {
+            throw new Error('Command must be provided when useShell is true');
+          }
+          child = spawn(options.command, { shell: true, cwd: options.cwd, env: process.env });
+        } else if (options.program) { // Check for program directly
+          child = spawn(options.program, options.args || [], { cwd: options.cwd, env: process.env });
+        } else {
+          throw new Error('Invalid options for executeCommandInPty: command or program must be specified.');
+        }
 
-        child = spawn(command, {
-          shell: true,        // cmd.exe on Windows, /bin/sh elsewhere
-          cwd,
-          env: process.env,
-          windowsHide: true,  // NO extra console window on Windows
-          stdio: 'pipe'
-        }) as ChildProcessWithoutNullStreams;
+        // child = spawn(command, {
+        //   shell: true,        // cmd.exe on Windows, /bin/sh elsewhere
+        //   cwd,
+        //   env: process.env,
+        //   windowsHide: true,  // NO extra console window on Windows
+        //   stdio: 'pipe'
+        // }) as ChildProcessWithoutNullStreams;
 
         child.stdout.on('data', (d) => {
           const text = formatTerminalChunk(d.toString());
           output += text;
           writeEmitter.fire(text);
-          if (interceptPattern?.test(text)) {
-            console.log(`Pattern matched: ${interceptPattern}`);
+          if (options.interceptPattern?.test(text)) {
+            console.log(`Pattern matched: ${options.interceptPattern}`);
+            options.onIntercept?.();
           }
         });
 
         child.stderr.on('data', (d) => {
-          const text = d.toString();
+          const text = formatTerminalChunk(d.toString());
           output += text;
           writeEmitter.fire(text);
-          if (interceptPattern?.test(text)) {
-            console.log(`Pattern matched: ${interceptPattern}`);
+          if (options.interceptPattern?.test(text)) {
+            console.log(`Pattern matched: ${options.interceptPattern}`);
+            options.onIntercept?.();
           }
         });
 
@@ -96,7 +123,7 @@ export const executeCommandInPty = async (
       }
     };
 
-    vscode.window.createTerminal({ name: `Run: ${command}`, pty }).show();
+    vscode.window.createTerminal({ name: `Run: ${options.terminalName}`, pty }).show();
   });
 };
 

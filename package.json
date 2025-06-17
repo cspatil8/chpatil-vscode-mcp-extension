@@ -5,7 +5,7 @@
     "description": "VSCode tools and resources as a Model Context Protocol (MCP) server in a VSCode extension.",
     "version": "0.0.9",
     "type": "commonjs",
-    "icon": "images/icon.png",
+    "icon": "images/icon-gemini.png",
     "engines": {
         "vscode": "^1.96.0"
     },

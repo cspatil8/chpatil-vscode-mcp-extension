@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { executeCommandInPty } from './run_cmd_pty'; // Added import
 
 /**
  * Debugs a specific Jest test using VS Code's built-in debugger.
@@ -14,12 +15,9 @@ export const debugJestTest = async (
     testNamePattern?: string,
 ): Promise<{ content: { type: 'text'; text: string }[]; isError: boolean }> => {
     try {
-        // Validate the test file path
+        // --- All of your existing validation and path-finding logic remains exactly the same ---
         if (!testFilePath) {
-            return {
-                content: [{ type: 'text', text: 'Error: Test file path is required.' }],
-                isError: true,
-            };
+            return { content: [{ type: 'text', text: 'Error: Test file path is required.' }], isError: true };
         }
 
         // Find the workspace folder for the test file
@@ -27,73 +25,72 @@ export const debugJestTest = async (
         const workspaceFolder = vscode.workspace.getWorkspaceFolder(fileUri);
 
         if (!workspaceFolder) {
-            return {
-                content: [{ type: 'text', text: `Error: Could not find workspace folder for file: ${testFilePath}` }],
-                isError: true,
-            };
+            return { content: [{ type: 'text', text: `Error: Could not find workspace folder for file: ${testFilePath}` }], isError: true };
         }
-
-        // Resolve Jest binary by walking up from the test file directory
         const located = findNearestJestBin(path.dirname(testFilePath));
 
         if (!located) {
-            return {
-                content: [
-                    {
-                        type: 'text',
-                        text: 'Could not find Jest. Install it with "npm i -D jest" in your project or ensure Jest is installed in any parent directory.',
-                    },
-                ],
-                isError: true,
-            };
+            // Using the slightly shorter error message from the coworker's snippet
+            return { content: [{ type: 'text', text: 'Could not find Jest. Install it with "npm i -D jest"' }], isError: true };
         }
 
         const { bin: jestJs, root: projectRoot } = located;
+        // --- End of unchanged logic ---
 
-        // Convert test file path to relative POSIX format for Jest
-        const relTestPath = toPosix(path.relative(projectRoot, testFilePath));
+        // --- START OF MODIFIED LOGIC ---
 
-        // Build CLI args exactly like the original extension
+        const port = 9229; // Standard debug port
+        // 1. PREPARE THE ARGUMENTS FOR DIRECT EXECUTION
         const args = [
-            '--runTestsByPath', // tell Jest: "this is a path, not a pattern"
-            relTestPath,
-            '--runInBand', // single process for easy debugging
-            '--no-coverage', // faster
+            `--inspect-brk=${port}`, // Start debugger server and wait for attach
+            jestJs,                 // The path to Jest's own JS file
+            '--runTestsByPath',
+            toPosix(path.relative(projectRoot, testFilePath)),
+            '--runInBand',
+            '--no-coverage',
         ];
-
         if (testNamePattern) {
             args.push('--testNamePattern', testNamePattern);
         }
 
-        // Create the debug configuration
+        // 2. CREATE A PROMISE THAT RESOLVES WHEN THE DEBUGGER IS READY
+        const attachPromise = new Promise<void>(resolve => {
+            // 3. CALL executeCommandInPty TO LAUNCH THE PROCESS
+            // We don't need to 'await' this call; it runs in the background.
+            // Its purpose is to start the process in the terminal.
+            executeCommandInPty({
+                terminalName: `Debug: ${path.basename(testFilePath)}`,
+                program: 'node', // We are executing 'node' directly
+                args: args,
+                cwd: projectRoot,
+                interceptPattern: /Debugger listening on ws:\/\//, // The message to watch for
+                onIntercept: () => resolve(), // When we see the message, resolve the promise
+            });
+        });
+
+        // 4. WAIT FOR THE "Debugger listening..." MESSAGE
+        await attachPromise; // Potential to hang if onIntercept is never called
+
+        // 5. ATTACH THE VS CODE DEBUGGER
         const debugConfig: vscode.DebugConfiguration = {
-            type: 'node', // VS Code will insert --inspect etc. for us
-            request: 'launch',
-            name: `Debug Jest Test${testNamePattern ? ` (${testNamePattern})` : ''}`,
-            program: jestJs, // **MUST be a JS file, not cmd.exe**
-            args,
-            cwd: projectRoot, // Use the project root (directory containing node_modules), NOT bin folder
-            console: 'integratedTerminal',
-            internalConsoleOptions: 'neverOpen',
+            type: 'node',
+            request: 'attach', // The crucial change from 'launch'
+            name: `Attach to Jest Test${testNamePattern ? ` (${testNamePattern})` : ''}`, // Name from coworker's suggestion
+            port: port,        // Connect to the port we specified
+            cwd: projectRoot,
             skipFiles: ['<node_internals>/**', '**/node_modules/**'],
         };
 
         // Start the debug session
         const debugStarted = await vscode.debug.startDebugging(workspaceFolder, debugConfig);
 
+        // --- END OF MODIFIED LOGIC ---
+
         if (debugStarted) {
-            const message = `Started debugging Jest test${
-                testNamePattern ? ` with pattern "${testNamePattern}"` : ''
-            } in file: ${path.basename(testFilePath)}`;
-            return {
-                content: [{ type: 'text', text: message }],
-                isError: false,
-            };
+            const message = `Debugger attached to Jest test${testNamePattern ? ` with pattern "${testNamePattern}"` : ''} in file: ${path.basename(testFilePath)}`;
+            return { content: [{ type: 'text', text: message }], isError: false };
         } else {
-            return {
-                content: [{ type: 'text', text: 'Could not start Jest debug session.' }],
-                isError: true,
-            };
+            return { content: [{ type: 'text', text: 'Could not attach Jest debug session.' }], isError: true };
         }
     } catch (error: any) {
         console.error('Error debugging Jest test:', error);
