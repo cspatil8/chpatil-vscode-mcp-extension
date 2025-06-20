@@ -90,14 +90,22 @@ export const activate = async (context: vscode.ExtensionContext) => {
         },
         async (params: { fileName: string; lineNumber: number; columnNumber?: number }) => {
             try {
-                setBreakpoint(params.fileName, params.lineNumber, params.columnNumber);
+                const breakPointId = setBreakpoint(params.fileName, params.lineNumber, params.columnNumber);
+                const location = `${params.fileName}:${params.lineNumber}${
+                    params.columnNumber !== undefined ? ':' + params.columnNumber : ''
+                }`;
+
                 return {
                     content: [
                         {
                             type: 'text',
-                            text: `Breakpoint set at ${params.fileName}:${params.lineNumber}${
-                                params.columnNumber !== undefined ? ':' + params.columnNumber : ''
-                            }`,
+                            text: `
+                                BREAKPOINT SUCCESSFULLY SET
+                                Location: ${location}
+                                Breakpoint ID: ${breakPointId}
+
+                                Use this Breakpoint ID for future reference or removal operations.
+                            `.trim().replace(/^\s+/gm, ''),
                         },
                     ],
                 };
@@ -165,6 +173,7 @@ export const activate = async (context: vscode.ExtensionContext) => {
             Starts a Jest test in debug mode using VS Code's built-in debugger.
             This allows debugging specific test files and optionally specific test cases within those files.
             The debugger will attach and allow stepping through test code and breakpoints.
+            If a breakpoint ID is provided, the function will wait until that breakpoint is hit or a 5-minute timeout occurs.
         `.trim(),
         {
             testFilePath: z.string().describe('The absolute path to the Jest test file to debug.'),
@@ -174,10 +183,16 @@ export const activate = async (context: vscode.ExtensionContext) => {
                 .describe(
                     'Optional pattern to match specific test names. If not provided, runs all tests in the file.',
                 ),
+            breakpointId: z
+                .string()
+                .optional()
+                .describe(
+                    'Optional breakpoint ID to wait for. If provided, the function will wait until this breakpoint is hit or a 5-minute timeout occurs.',
+                ),
         },
-        async (params: { testFilePath: string; testNamePattern?: string }) => {
+        async (params: { testFilePath: string; testNamePattern?: string; breakpointId?: string }) => {
             try {
-                const result = await debugJestTest(params.testFilePath, params.testNamePattern);
+                const result = await debugJestTest(params.testFilePath, params.testNamePattern, params.breakpointId);
                 return {
                     ...result,
                     content: result.content.map((c) => ({
