@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
 
-export function setBreakpoint(fileName: string, lineNumber: number, columnNumber?: number): void {
+export function setBreakpoint(fileName: string, lineNumber: number, columnNumber?: number): string {
     const column = columnNumber ?? 0; // Default to column 0 if not provided
     const location = new vscode.Location(vscode.Uri.file(fileName), new vscode.Position(lineNumber, column));
     const breakpoint = new vscode.SourceBreakpoint(location);
     vscode.debug.addBreakpoints([breakpoint]);
+    return breakpoint.id;
 }
 
 export function unsetBreakpoint(fileName: string, lineNumber: number, columnNumber?: number): void {
