@@ -1,7 +1,10 @@
-export declare const debugJestTest: (testFilePath: string, testNamePattern?: string, breakpointId?: string) => Promise<{
+export declare const debugJestTest: (testFilePath: string, testNamePattern?: string) => Promise<{
     content: {
         type: "text";
         text: string;
     }[];
     isError: boolean;
 }>;
+export declare function waitForNextStop(opts?: {
+    skipEntry?: boolean;
+}): Promise<string>;

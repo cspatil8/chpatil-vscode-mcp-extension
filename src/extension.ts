@@ -192,7 +192,7 @@ export const activate = async (context: vscode.ExtensionContext) => {
         },
         async (params: { testFilePath: string; testNamePattern?: string; breakpointId?: string }) => {
             try {
-                const result = await debugJestTest(params.testFilePath, params.testNamePattern, params.breakpointId);
+                const result = await debugJestTest(params.testFilePath, params.testNamePattern);
                 return {
                     ...result,
                     content: result.content.map((c) => ({
@@ -290,12 +290,12 @@ export const activate = async (context: vscode.ExtensionContext) => {
         {}, // No parameters needed
         async () => {
             try {
-                await debugContinue();
+                const result = await debugContinue();
                 return {
                     content: [
                         {
                             type: 'text',
-                            text: 'Debug continue executed successfully.',
+                            text: result,
                         },
                     ],
                 };
